@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>荷物持ちルーレット</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f14; --surface: #1a1a24; --border: #2e2e42;
+    --accent: #f0c040; --red: #e05a5a; --text: #f0eee8; --muted: #7a7a9a; --radius: 12px;
+  }
+  body {
+    font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 24px 16px 60px;
+  }
+  h1 { font-size: clamp(1.3rem,5vw,1.8rem); font-weight: 900; color: var(--accent); margin-bottom: 4px; text-align: center; }
+  .subtitle { font-size: 0.78rem; color: var(--muted); margin-bottom: 28px; text-align: center; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; width: 100%; max-width: 440px; margin-bottom: 14px; }
+  .section-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; }
+  button { cursor: pointer; border: none; border-radius: 8px; font-family: inherit; font-weight: 700; font-size: 0.88rem; transition: opacity 0.15s, transform 0.1s; }
+  button:active { transform: scale(0.97); }
+  .btn-sm { background: var(--border); color: var(--muted); padding: 5px 10px; font-size: 0.75rem; }
+  .select-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+  .participant-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .p-chip { padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; font-weight: 700; border: 2px solid var(--border); background: var(--bg); color: var(--muted); cursor: pointer; transition: all 0.15s; user-select: none; }
+  .p-chip.selected { border-color: var(--accent); background: rgba(240,192,64,0.12); color: var(--accent); }
+  .count-row { display: flex; align-items: center; gap: 12px; }
+  .count-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--border); color: var(--text); font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
+  .count-display { font-size: 1.4rem; font-weight: 900; color: var(--accent); min-width: 32px; text-align: center; }
+  .count-note { font-size: 0.75rem; color: var(--muted); margin-left: 4px; }
+  .wheel-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .wheel-container { position: relative; width: 260px; height: 260px; }
+  canvas { border-radius: 50%; display: block; }
+  .pin { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 26px solid var(--accent); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); z-index: 11; }
+  .center-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 18px; height: 18px; background: #fff; border-radius: 50%; border: 3px solid var(--bg); z-index: 10; }
+  .btn-spin { background: var(--accent); color: #111; padding: 13px 0; font-size: 1.05rem; border-radius: 10px; width: 100%; max-width: 260px; letter-spacing: 0.05em; }
+  .btn-spin:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  .spin-status { font-size: 0.8rem; color: var(--accent); text-align: center; min-height: 18px; font-weight: 700; }
+  .result-card { display: none; }
+  .result-card.show { display: block; }
+  .result-list { display: flex; flex-direction: column; gap: 10px; }
+  .result-item { display: flex; align-items: center; gap: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+  .rank-badge { min-width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 900; flex-shrink: 0; }
+  .rank-1 { background: #f0c040; color: #111; }
+  .rank-2 { background: #b0b8c8; color: #111; }
+  .rank-3 { background: #c87040; color: #fff; }
+  .rank-n { background: var(--border); color: var(--muted); font-size: 0.85rem; }
+  .result-name { font-size: 1.05rem; font-weight: 700; }
+  .result-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .btn-retry { background: var(--border); color: var(--text); padding: 11px 0; width: 100%; margin-top: 12px; border-radius: 10px; font-size: 0.95rem; }
+  @keyframes fadeIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:none; } }
+</style>
+</head>
+<body>
+<h1>&#x1F392; 荷物持ちルーレット</h1>
+
+
+<div class="card">
+  <div class="section-label">今回の参加者を選ぶ</div>
+  <div class="select-actions">
+    <button class="btn-sm" onclick="selectAll()">全選択</button>
+    <button class="btn-sm" onclick="selectNone()">全解除</button>
+  </div>
+  <div class="participant-grid" id="participantGrid"></div>
+</div>
+
+<div class="card">
+  <div class="section-label">荷物持ちの人数</div>
+  <div class="count-row">
+    <button class="count-btn" onclick="changeCount(-1)">&#xFF0D;</button>
+    <div class="count-display" id="countDisplay">1</div>
+    <button class="count-btn" onclick="changeCount(1)">&#xFF0B;</button>
+    <span class="count-note" id="countNote">人</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-label">ルーレット</div>
+  <div class="wheel-wrap">
+    <div class="wheel-container">
+      <div class="pin"></div>
+      <canvas id="wheel" width="260" height="260"></canvas>
+      <div class="center-dot"></div>
+    </div>
+    <p class="spin-status" id="spinStatus"></p>
+    <button class="btn-spin" id="spinBtn" onclick="spin()" disabled>まわす</button>
+  </div>
+</div>
+
+<div class="card result-card" id="resultCard">
+  <div class="section-label">結果 &#x1F392;</div>
+  <div class="result-list" id="resultList"></div>
+  <button class="btn-retry" onclick="resetResult()">もう一度</button>
+</div>
+
+<script>
+var COLORS = ['#c0392b','#2980b9','#27ae60','#8e44ad','#d35400','#16a085','#f39c12','#2c3e50','#e91e63','#00796b','#6d4c41','#37474f'];
+var MEMBERS = ['\u671d\u7530','\u77f3\u4e95','\u6c60\u7530','\u4e95\u4e0a','\u5965\u7530','\u7532\u6590','\u6728\u539f','\u9d66\u9d5c','\u4e2d\u9053','\u897f\u7530','\u5bae\u91ce','\u68ee\u6c5f'];
+var selectedMembers = {};
+var nimotuCount = 1;
+var spinning = false;
+var angle = 0;
+var results = [];
+var remainingPool = [];
+
+var canvas = document.getElementById('wheel');
+var ctx = canvas.getContext('2d');
+
+// 初期全選択
+MEMBERS.forEach(function(m){ selectedMembers[m] = true; });
+
+function renderParticipants() {
+  var grid = document.getElementById('participantGrid');
+  grid.innerHTML = MEMBERS.map(function(m) {
+    var sel = selectedMembers[m] ? 'selected' : '';
+    return '<div class="p-chip ' + sel + '" onclick="toggleParticipant(\'' + m + '\')">' + m + '</div>';
+  }).join('');
+}
+
+function toggleParticipant(name) {
+  selectedMembers[name] = !selectedMembers[name];
+  renderParticipants();
+  updateSpin();
+  drawWheel(0, null);
+}
+
+function selectAll() {
+  MEMBERS.forEach(function(m){ selectedMembers[m] = true; });
+  renderParticipants(); updateSpin(); drawWheel(0, null);
+}
+
+function selectNone() {
+  MEMBERS.forEach(function(m){ selectedMembers[m] = false; });
+  renderParticipants(); updateSpin(); drawWheel(0, null);
+}
+
+function getPool() {
+  return MEMBERS.filter(function(m){ return selectedMembers[m]; });
+}
+
+function changeCount(d) {
+  var sel = getPool().length;
+  nimotuCount = Math.max(1, Math.min(sel || 1, nimotuCount + d));
+  document.getElementById('countDisplay').textContent = nimotuCount;
+  updateSpin();
+}
+
+function updateSpin() {
+  var pool = getPool();
+  if (nimotuCount > pool.length && pool.length > 0) {
+    nimotuCount = pool.length;
+    document.getElementById('countDisplay').textContent = nimotuCount;
+  }
+  var ok = pool.length >= 1 && nimotuCount <= pool.length && results.length < nimotuCount;
+  document.getElementById('spinBtn').disabled = spinning || !ok;
+  document.getElementById('countNote').textContent = pool.length > 0 ? '\u4eba\uff08\u53c2\u52a0\u8005 ' + pool.length + ' \u4eba\u4e2d\uff09' : '\u4eba';
+}
+
+function drawWheel(offsetAngle, pool) {
+  if (pool === null || pool === undefined) pool = getPool();
+  var cx = canvas.width / 2, cy = canvas.height / 2, r = cx - 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!pool.length) {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#2e2e42'; ctx.fill();
+    ctx.fillStyle = '#7a7a9a'; ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('\u53c2\u52a0\u8005\u3092\u9078\u3093\u3067\u304f\u3060\u3055\u3044', cx, cy);
+    return;
+  }
+  var slice = (Math.PI * 2) / pool.length;
+  for (var i = 0; i < pool.length; i++) {
+    var start = offsetAngle + slice * i - Math.PI / 2;
+    var end = start + slice;
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end); ctx.closePath();
+    ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
+    ctx.strokeStyle = '#0f0f14'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(start + slice / 2);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    var fs = Math.max(9, Math.min(16, 180 / pool.length));
+    ctx.font = 'bold ' + fs + 'px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 3;
+    var label = pool[i].length > 4 ? pool[i].slice(0, 4) + '\u2026' : pool[i];
+    ctx.fillText(label, r - 10, 0);
+    ctx.restore();
+  }
+}
+
+function spin() {
+  if (spinning) return;
+  var pool = getPool();
+  if (!pool.length || nimotuCount > pool.length) return;
+  if (!results.length) remainingPool = pool.slice();
+  spinning = true;
+  document.getElementById('spinBtn').disabled = true;
+  var currentPool = remainingPool.slice();
+  drawWheel(angle, currentPool);
+  var totalRotation = Math.PI * 2 * (7 + Math.random() * 6);
+  var duration = 3200 + Math.random() * 800;
+  var startTime = performance.now();
+  var startAngle = angle;
+
+  function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
+
+  function frame(now) {
+    var t = Math.min((now - startTime) / duration, 1);
+    angle = startAngle + totalRotation * easeOut(t);
+    drawWheel(angle, currentPool);
+    if (t < 1) { requestAnimationFrame(frame); return; }
+    var slice = (Math.PI * 2) / currentPool.length;
+    var norm = ((-angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    var idx = Math.floor(norm / slice) % currentPool.length;
+    var winner = currentPool[idx];
+    results.push(winner);
+    remainingPool = remainingPool.filter(function(m){ return m !== winner; });
+    spinning = false;
+    showResults();
+    if (results.length < nimotuCount && remainingPool.length > 0) {
+      document.getElementById('spinStatus').textContent = results.length + '\u4eba\u76ee\u304c\u78ba\u5b9a\uff01\u6b21\u3092\u307e\u308f\u3057\u3066\u304f\u3060\u3055\u3044';
+      document.getElementById('spinBtn').textContent = (results.length + 1) + '\u4eba\u76ee\u3092\u307e\u308f\u3059';
+      document.getElementById('spinBtn').disabled = false;
+      drawWheel(0, remainingPool); angle = 0;
+    } else {
+      document.getElementById('spinStatus').textContent = '\u5168\u54e1\u6c7a\u5b9a\uff01';
+      document.getElementById('spinBtn').disabled = true;
+      document.getElementById('spinBtn').textContent = '\u307e\u308f\u3059';
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function showResults() {
+  var card = document.getElementById('resultCard');
+  var list = document.getElementById('resultList');
+  card.classList.add('show');
+  var medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+  var orders = ['1\u756a\u76ee\uff08\u5148\u982d\uff09','2\u756a\u76ee','3\u756a\u76ee','4\u756a\u76ee','5\u756a\u76ee','6\u756a\u76ee','7\u756a\u76ee','8\u756a\u76ee'];
+  list.innerHTML = results.map(function(name, i) {
+    var rc = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-n';
+    var badge = medals[i] || (i + 1);
+    return '<div class="result-item"><div class="rank-badge ' + rc + '">' + badge + '</div><div><div class="result-name">' + name + '</div><div class="result-label">\ud83e\udd92 \u8377\u7269\u6301\u3061 ' + (orders[i] || (i + 1) + '\u756a\u76ee') + '</div></div></div>';
+  }).join('');
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function resetResult() {
+  results = []; remainingPool = [];
+  document.getElementById('resultCard').classList.remove('show');
+  document.getElementById('spinStatus').textContent = '';
+  document.getElementById('spinBtn').textContent = '\u307e\u308f\u3059';
+  angle = 0; drawWheel(0, null); updateSpin();
+}
+
+renderParticipants();
+drawWheel(0, null);
+updateSpin();
+</script>
+</body>
+</html>
